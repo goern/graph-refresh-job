@@ -64,6 +64,7 @@ def graph_refresh(graph_hosts: str = None, graph_port: int = None) -> None:
     graph.connect()
 
     packages = []
+    count = 0
     for package, versions in graph.retrieve_unsolved_pypi_packages().items():
         for version in versions:
             _LOGGER.info(f"Adding new package {package} in version {version}")
@@ -79,10 +80,17 @@ def graph_refresh(graph_hosts: str = None, graph_port: int = None) -> None:
 
                 packages.append(f"{dependent_package}=={dependent_version}\n")
 
+        count += 1
+        if _THOTH_GRAPH_REFRESH_EAGER_STOP and count >= _THOTH_GRAPH_REFRESH_EAGER_STOP:
+            _LOGGER.info(
+                "Eager stop of scheduling new solver runs for unsolved package versions, packages scheduled: %d",
+                count
+            )
+            break
+
     if not packages:
         return
 
-    count = 0
     openshift = OpenShift()
     for solver in openshift.get_solver_names():
         for package in packages:
@@ -91,14 +99,6 @@ def graph_refresh(graph_hosts: str = None, graph_port: int = None) -> None:
             )
             _LOGGER.info("Scheduled solver %r for package %r, pod id is %r", solver, package, pod_id)
             _METRIC_SOLVERS_SCHEDULED.labels(solver).inc()
-
-            count += 1
-            if _THOTH_GRAPH_REFRESH_EAGER_STOP and count >= _THOTH_GRAPH_REFRESH_EAGER_STOP:
-                _LOGGER.info(
-                    "Eager stop of scheduling new solver runs for unsolved package versions, packages scheduled: %d",
-                    count
-                )
-                return
 
 
 def main():
